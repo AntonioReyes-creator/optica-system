@@ -1,8 +1,4 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Get a free hosted Postgres database in seconds: `npx create-db`
-
+// paso 1: configurar el cliente de prisma
 generator client {
   provider = "prisma-client"
   output   = "../generated/prisma"
@@ -10,4 +6,292 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+//paso 2 : enumns(Diccionarios de estados)
+enum Status{
+  ACTIVE
+  INACTIVE
+}
+
+enum AppointmentStatus{
+  PENDING
+  CONFIRMED
+  SCHEDULED
+  COMPLETED
+  CANCELED
+}
+enum ContactStatus{
+  NEW
+  READ
+  RESPONDED
+}
+enum InventoryMovementType{
+  IN
+  OUT
+  ADJUSTMENT
+}
+
+enum DayOfWeek{
+  MONDAY
+  TUESDAY
+  WEDNESDAY
+  THURSDAY
+  FRIDAY
+  SATURDAY
+  SUNDAY
+}
+
+//paso 3 : seguridad y accesos
+
+model Permission {
+  id          String      @id @default(uuid())
+  name        String   @unique
+  description String?
+  roles       Role[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model Role {
+  id          String      @id @default(uuid())
+  name        String       @unique
+  description String?
+  permissions Permission[] 
+  users       User[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+}
+
+model User {
+  id         String     @id @default(uuid())
+  roleId     String
+  role       Role       @relation(fields: [roleId], references: [id])
+  firstName  String
+  lastName   String
+  email      String     @unique
+  password   String
+  status     Status     @default(ACTIVE)
+  lastLogin  DateTime?
+  auditLogs  AuditLog[]
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  deletedAt  DateTime?
+
+  @@index([roleId])
+}
+
+// Paso 4: Sucursales
+
+model Branch {
+  id           String        @id @default(uuid())
+  name         String
+  address      String
+  phone        String?
+  email        String?
+  status       Status        @default(ACTIVE)
+  employees    Employee[]
+  appointments Appointment[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+
+// Paso 5: Empleados / Especialistas
+
+model Employee {
+  id           String             @id @default(uuid())
+  branchId     String
+  branch       Branch             @relation(fields: [branchId], references: [id])
+  firstName    String
+  lastName     String
+  email        String             @unique
+  phone        String?
+  specialty    String?
+  status       Status             @default(ACTIVE)
+  schedules    EmployeeSchedule[]
+  services     EmployeeService[]
+  appointments Appointment[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  deletedAt    DateTime?
+
+  @@index([branchId])
+}
+
+model EmployeeSchedule {
+  id         String    @id @default(uuid())
+  employeeId String
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+  dayOfWeek  DayOfWeek
+  startTime  String
+  endTime    String
+  isActive   Boolean   @default(true)
+
+  @@index([employeeId])
+}
+
+
+// Paso 6: Servicios
+
+model Service {
+  id              String            @id @default(uuid())
+  name            String
+  description     String?
+  durationMinutes Int
+  price           Decimal           @db.Decimal(10, 2)
+  status          Status            @default(ACTIVE)
+  employees       EmployeeService[]
+  appointments    Appointment[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  deletedAt       DateTime?
+}
+
+model EmployeeService {
+  employeeId String
+  serviceId  String
+  employee   Employee @relation(fields: [employeeId], references: [id])
+  service    Service  @relation(fields: [serviceId], references: [id])
+
+  @@id([employeeId, serviceId])
+}
+
+
+// Paso 7: Clientes y Citas
+
+model Client {
+  id           String        @id @default(uuid())
+  firstName    String
+  lastName     String
+  email        String        @unique
+  phone        String?
+  status       Status        @default(ACTIVE)
+  appointments Appointment[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+}
+
+model Appointment {
+  id          String            @id @default(uuid())
+  branchId    String
+  branch      Branch            @relation(fields: [branchId], references: [id])
+  employeeId  String
+  employee    Employee          @relation(fields: [employeeId], references: [id])
+  serviceId   String
+  service     Service           @relation(fields: [serviceId], references: [id])
+  clientId    String
+  client      Client            @relation(fields: [clientId], references: [id])
+  dateTime    DateTime
+  status      AppointmentStatus @default(PENDING)
+  notes       String?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  deletedAt   DateTime?
+
+  @@index([branchId])
+  @@index([employeeId])
+  @@index([serviceId])
+  @@index([clientId])
+}
+
+
+// Paso 8: Catálogo e Inventario (Productos)
+
+model Category {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Brand {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  products    Product[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Product {
+  id          String    @id @default(uuid())
+  categoryId  String
+  category    Category  @relation(fields: [categoryId], references: [id])
+  brandId     String
+  brand       Brand     @relation(fields: [brandId], references: [id])
+  name        String
+  description String?
+  sku         String    @unique
+  price       Decimal   @db.Decimal(10, 2)
+  stock       Int       @default(0)
+  status      Status    @default(ACTIVE)
+  images      Image[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+
+  @@index([categoryId])
+  @@index([brandId])
+}
+
+model Image {
+  id        String   @id @default(uuid())
+  productId String
+  product   Product  @relation(fields: [productId], references: [id])
+  url       String   @db.Text
+  isPrimary Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([productId])
+}
+
+
+// Paso 9: Marketing y Contacto
+
+model Promotion {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  discountPct Decimal   @db.Decimal(5, 2) // Ej. 15.50 para 15.5%
+  startDate   DateTime
+  endDate     DateTime
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+}
+
+model Contact {
+  id        String        @id @default(uuid())
+  name      String
+  email     String
+  phone     String?
+  subject   String
+  message   String        @db.Text
+  status    ContactStatus @default(NEW)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+
+// Paso 10: Auditoría
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  action    String   // Ej: "CREATE_PRODUCT", "DELETE_USER"
+  table     String   // Ej: "Product", "User"
+  recordId  String   // El ID del registro que fue afectado
+  oldValues String?  @db.Text // JSON con los datos anteriores
+  newValues String?  @db.Text // JSON con los datos nuevos
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
 }
